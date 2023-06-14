@@ -24,17 +24,19 @@ void VMinitialize() {
 
 int VMread(uint64_t virtualAddress, word_t* value){
     int bit_index = VIRTUAL_ADDRESS_WIDTH - OFFSET_WIDTH;
-    int curr_offset = 0;
+    int curr_offset;
     int curr_addy = 0;
     while (bit_index >= 0){
         curr_offset = virtualAddress >> bit_index & (2 ^ OFFSET_WIDTH - 1);
         PMread(curr_addy * PAGE_SIZE + curr_offset, &curr_addy);
         if (curr_addy == 0){
-            return 0;
+            int f = FindPageToEvict();
+            PMwrite(curr_addy * PAGE_SIZE + curr_offset, f);
+            curr_addy = f;
         }
-
         bit_index -= OFFSET_WIDTH;
     }
+    PMread(curr_addy * PAGE_SIZE + curr_offset, value);
 }
 
 int VMwrite(uint64_t virtualAddress, word_t value){
