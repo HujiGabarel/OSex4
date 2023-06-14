@@ -23,6 +23,9 @@ void VMinitialize() {
 
 
 int VMread(uint64_t virtualAddress, word_t* value){
+}
+
+int VMwrite(uint64_t virtualAddress, word_t value){
     int bit_index = VIRTUAL_ADDRESS_WIDTH - OFFSET_WIDTH;
     int curr_offset;
     int curr_addy = 0;
@@ -31,15 +34,21 @@ int VMread(uint64_t virtualAddress, word_t* value){
         PMread(curr_addy * PAGE_SIZE + curr_offset, &curr_addy);
         if (curr_addy == 0){
             int f = FindPageToEvict();
+            // TODO Make sure we did not evict somewhere we already visited (one of the previous fs)
+            if (bit_index >= OFFSET_WIDTH){
+                for (int i = 0; i < PAGE_SIZE; ++i) {
+                    PMwrite(f * PAGE_SIZE + i, 0);
+                }
+            } else {
+                //TODO - not all the way there yet
+                PMrestore(f, curr_addy);
+            }
             PMwrite(curr_addy * PAGE_SIZE + curr_offset, f);
             curr_addy = f;
         }
         bit_index -= OFFSET_WIDTH;
     }
-    PMread(curr_addy * PAGE_SIZE + curr_offset, value);
-}
-
-int VMwrite(uint64_t virtualAddress, word_t value){
-
+    PMwrite(curr_addy * PAGE_SIZE + curr_offset, value);
+    return 1;
 }
 
