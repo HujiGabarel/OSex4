@@ -6,12 +6,45 @@
 #include "PhysicalMemory.h"
 
 
+//TODO should I save father page?
+void TraverseTree(word_t frame_index, int depth, word_t *max_frame_index,
+                 word_t *frame_found_index){
+  if (depth >= VIRTUAL_ADDRESS_WIDTH/OFFSET_WIDTH){
+    return;
+  }
 
+  bool is_empty = true;
+  word_t res = 0;
+  for (int i = 0; i < PAGE_SIZE; i++){
+    PMread (frame_index*PAGE_SIZE + i, &res);
+    if (res != 0){
+      is_empty = false;
+      TraverseTree (res, depth+1,max_frame_index,frame_found_index);
+      if (res > *max_frame_index){
+        *max_frame_index = res;
+      }
+    }
+  }
 
-
-int FindPageToEvict(){
-
+  if (is_empty){
+    *frame_found_index = frame_index;
+  }
 }
+
+word_t FindUnusedFrameIndex(){
+  word_t frame_found_index = 0;
+  word_t max_index = 0;
+  TraverseTree (0,0, &frame_found_index, &max_index);
+  if (frame_found_index != 0){
+    return frame_found_index;
+  }
+  if (max_index + 1 < NUM_FRAMES){
+    return (max_index + 1);
+  }
+  return 0;
+}
+
+
 
 
 void VMinitialize() {
