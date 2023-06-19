@@ -5,15 +5,16 @@
 #include "VirtualMemory.h"
 #include "PhysicalMemory.h"
 
-#define max(a,b) \
+#define max(a, b) \
    ({ __typeof__ (a) _a = (a); \
        __typeof__ (b) _b = (b); \
      _a > _b ? _a : _b; })
-#define min(a,b) \
+#define min(a, b) \
    ({ __typeof__ (a) _a = (a); \
        __typeof__ (b) _b = (b); \
      _a < _b ? _a : _b; })
 #define abs(a) max(a, -a)
+
 uint64_t FindPageToEvict(uint64_t);
 
 //TODO should I save father page?
@@ -46,7 +47,7 @@ void TraverseTree(word_t frame_index, int depth, word_t *max_frame_index,
 
 }
 
-word_t FindUnusedFrameIndex() {
+word_t GetEmptyFrameIndex(uint64_t virtual_dest_index, word_t frame_index_to_ignore) {
     word_t frame_found_index = 0;
     word_t max_index = 0;
     TraverseTree(0, 0, &frame_found_index, &max_index);
@@ -62,49 +63,60 @@ word_t FindUnusedFrameIndex() {
 
 void VMinitialize() {
     for (uint64_t i = 0; i < PAGE_SIZE; ++i) {
-        // TODO - where should I zero? does PMwrite automatically do it for words?
         PMwrite(i, 0);
     }
 }
 
 
-int VMread(uint64_t virtualAddress, word_t *value) {
-}
+word_t get_frame_index(uint64_t virtualAddress) {
 
-int VMwrite(uint64_t virtualAddress, word_t value) {
-    int bit_index = VIRTUAL_ADDRESS_WIDTH - OFFSET_WIDTH;
-    int curr_offset;
-    int curr_addy = 0;
-    while (bit_index >= 0) {
-        curr_offset = virtualAddress >> bit_index & (2 ^ OFFSET_WIDTH - 1);
-        PMread(curr_addy * PAGE_SIZE + curr_offset, &curr_addy);
-        if (curr_addy == 0) {
-            int f = FindUnusedFrameIndex();
-            if (f == 0) {
-                PMevict(FindPageToEvict(0), 0); //TOdo - where to evict?
-            }
-            // TODO Make sure we did not evict somewhere we already visited (one of the previous fs)
-            if (bit_index >= OFFSET_WIDTH) {
-                for (int i = 0; i < PAGE_SIZE; ++i) {
+//    int bit_index = CEIL(VIRTUAL_ADDRESS_WIDTH / (double)OFFSET_WIDTH) * OFFSET_WIDTH - OFFSET_WIDTH;
+    int bit_index = TABLES_DEPTH * OFFSET_WIDTH;
+    uint64_t curr_offset;
+    word_t curr_frame_index = 0;
+    word_t father_frame_index;
+    while (bit_index > 0) {
+        curr_offset = (virtualAddress >> bit_index) % PAGE_SIZE;
+        father_frame_index = curr_frame_index;
+        uint64_t curr_address = curr_frame_index * PAGE_SIZE + curr_offset;
+        PMread(curr_address, &curr_frame_index);
+        if (curr_frame_index == 0) {
+            word_t f = GetEmptyFrameIndex(virtualAddress >> OFFSET_WIDTH, father_frame_index);
+            if (bit_index > OFFSET_WIDTH) {
+                for (uint64_t i = 0; i < PAGE_SIZE; ++i) {
                     PMwrite(f * PAGE_SIZE + i, 0);
                 }
             } else {
-                //TODO - not all the way there yet
-                PMrestore(f, curr_addy);
+                PMrestore(f, (virtualAddress >> OFFSET_WIDTH));
             }
-            PMwrite(curr_addy * PAGE_SIZE + curr_offset, f);
-            curr_addy = f;
+            PMwrite(curr_address, f);
+            curr_frame_index = f;
         }
         bit_index -= OFFSET_WIDTH;
     }
-    PMwrite(curr_addy * PAGE_SIZE + curr_offset, value);
-    return 1;
+    return curr_frame_index;
 }
 
-uint64_t FindPageToEvict(int index) {
-    uint64_t min_frame_index = 0;
-    uint64_t max_frame_distance = 0;
-    for (int i = 0; i < NUM_FRAMES; ++i)
-        max_frame_distance = max(max_frame_distance, min(abs(index - i), abs(NUM_FRAMES - index + i)));
+
+int VMread(uint64_t virtualAddress, word_t *value) {
+    if (virtualAddress >= VIRTUAL_MEMORY_SIZE || TABLES_DEPTH >= RAM_SIZE) {
+        return 0;
+    }
+    word_t curr_frame_index = get_frame_index(virtualAddress);
+    uint64_t curr_offset = (virtualAddress) % PAGE_SIZE;
+    PMread(curr_frame_index * PAGE_SIZE + curr_offset, value);
+    return 1;
+    //TODO - return 0 if failed
+}
+
+int VMwrite(uint64_t virtualAddress, word_t value) {
+    if (virtualAddress >= VIRTUAL_MEMORY_SIZE  || TABLES_DEPTH >= RAM_SIZE) {
+        return 0;
+    }
+    word_t curr_frame_index = get_frame_index(virtualAddress);
+    uint64_t curr_offset = (virtualAddress) % PAGE_SIZE;
+    PMwrite(curr_frame_index * PAGE_SIZE + curr_offset, value);
+    return 1;
+    //TODO - return 0 if failed
 }
 
