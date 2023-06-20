@@ -18,20 +18,39 @@
 uint64_t FindPageToEvict(uint64_t);
 
 //TODO should I save father page?
-void TraverseTree(word_t frame_index, int depth, word_t *max_frame_index,
-                  word_t *frame_found_index) {
-    if (depth + 1 >= VIRTUAL_ADDRESS_WIDTH / OFFSET_WIDTH) {
+void TraverseTree(word_t frame_index, uint64_t address_of_reference, int depth, uint64_t virtual_page_index,
+                  uint64_t virtual_dest_index, word_t frame_index_to_ignore, word_t *max_frame_index,
+                  word_t *frame_found_index, word_t *max_dist_frame_index, uint64_t *max_dist_page_index,
+                  uint64_t *max_dist, uint64_t *founded_address_of_reference) {
+    if (depth >= TABLES_DEPTH) {
+        uint64_t abs_dist;
+        if (virtual_page_index > virtual_dest_index) {
+            abs_dist = virtual_page_index - virtual_dest_index;
+        }
+        else {
+            abs_dist = virtual_dest_index - virtual_page_index;
+        }
+        uint64_t cyc_dist = min(abs_dist, NUM_PAGES - abs_dist);
+        if (cyc_dist > *max_dist) {
+            *max_dist_frame_index = frame_index;
+            *max_dist_page_index = virtual_page_index;
+            *max_dist = cyc_dist;
+            *founded_address_of_reference = address_of_reference;
+        }
         return;
     }
 
     bool is_empty = true;
     word_t res = 0;
-    for (int i = 0; i < PAGE_SIZE; i++) {
+    for (uint64_t i = 0; i < PAGE_SIZE; i++) {
         //TODO - memory counted by word size? i * sizeof(word_t)?
-        PMread(frame_index * PAGE_SIZE + i, &res);
+        uint64_t son_index_reference = frame_index * PAGE_SIZE + i;
+        PMread(son_index_reference, &res);
         if (res != 0) {
             is_empty = false;
-            TraverseTree(res, depth + 1, max_frame_index, frame_found_index);
+            TraverseTree(res, son_index_reference, depth + 1, virtual_page_index * PAGE_SIZE + i,
+                         virtual_dest_index, frame_index_to_ignore, max_frame_index, frame_found_index, max_dist_frame_index,
+                         max_dist_page_index, max_dist, founded_address_of_reference);
             if (*frame_found_index != 0) {
                 return;
             }
@@ -40,8 +59,9 @@ void TraverseTree(word_t frame_index, int depth, word_t *max_frame_index,
             }
         }
     }
-    if (is_empty && *frame_found_index == 0) {
+    if (is_empty && (*frame_found_index == 0) && (frame_index != frame_index_to_ignore)){
         *frame_found_index = frame_index;
+        *founded_address_of_reference = address_of_reference;
         return;
     }
 
@@ -50,14 +70,25 @@ void TraverseTree(word_t frame_index, int depth, word_t *max_frame_index,
 word_t GetEmptyFrameIndex(uint64_t virtual_dest_index, word_t frame_index_to_ignore) {
     word_t frame_found_index = 0;
     word_t max_index = 0;
-    TraverseTree(0, 0, &frame_found_index, &max_index);
+    word_t max_dist_frame_index = 0;
+    uint64_t founded_address_of_reference = 0;
+    uint64_t max_dist_page_index = 0;
+    uint64_t max_dist = 0;
+    TraverseTree(0, 0, 0, 0, virtual_dest_index, frame_index_to_ignore, &max_index, &frame_found_index, &max_dist_frame_index,
+                 &max_dist_page_index, &max_dist, &founded_address_of_reference);
     if (frame_found_index != 0) {
+        PMwrite(founded_address_of_reference, 0);
         return frame_found_index;
     }
     if (max_index + 1 < NUM_FRAMES) {
         return (max_index + 1);
     }
-    return 0;
+    if (max_dist_frame_index == 0) {
+        return 0;
+    }
+    PMevict(max_dist_frame_index, max_dist_page_index);
+    PMwrite(founded_address_of_reference, 0);
+    return max_dist_frame_index;
 }
 
 
