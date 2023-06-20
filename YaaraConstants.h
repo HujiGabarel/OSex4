@@ -9,7 +9,7 @@ typedef int word_t;
 
 // number of bits in the offset
 #define OFFSET_WIDTH 1
-// page/frame size in words
+// page/i size in words
 // in this implementation this is also the number of entries in a table
 #define PAGE_SIZE (1LL << OFFSET_WIDTH)
 

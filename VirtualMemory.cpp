@@ -99,7 +99,7 @@ word_t get_frame_index(uint64_t virtualAddress) {
 
 
 int VMread(uint64_t virtualAddress, word_t *value) {
-    if (virtualAddress >= VIRTUAL_MEMORY_SIZE || TABLES_DEPTH >= RAM_SIZE) {
+    if (virtualAddress >= VIRTUAL_MEMORY_SIZE || TABLES_DEPTH >= NUM_FRAMES) {
         return 0;
     }
     word_t curr_frame_index = get_frame_index(virtualAddress);
@@ -110,7 +110,7 @@ int VMread(uint64_t virtualAddress, word_t *value) {
 }
 
 int VMwrite(uint64_t virtualAddress, word_t value) {
-    if (virtualAddress >= VIRTUAL_MEMORY_SIZE  || TABLES_DEPTH >= RAM_SIZE) {
+    if (virtualAddress >= VIRTUAL_MEMORY_SIZE  || TABLES_DEPTH >= NUM_FRAMES) {
         return 0;
     }
     word_t curr_frame_index = get_frame_index(virtualAddress);
